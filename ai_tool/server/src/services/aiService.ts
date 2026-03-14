@@ -80,12 +80,8 @@ function getApiKeyByProvider(provider?: string, baseURL?: string): string {
  */
 function normalizeBaseURL(baseURL: string): string {
   if (!baseURL) return baseURL
-  // 移除末尾的多个斜杠
+  // 移除末尾的斜杠（OpenAI SDK 会自动添加）
   baseURL = baseURL.replace(/\/+$/, '')
-  // 对于 Gemini，确保末尾有单个斜杠
-  if (baseURL.includes('generativelanguage.googleapis.com') && !baseURL.endsWith('/')) {
-    baseURL += '/'
-  }
   return baseURL
 }
 
@@ -135,10 +131,26 @@ function createClient(config: AIConfig): OpenAI {
   if (!config.apiKey) {
     throw new Error('API Key 未配置，请在右上角设置中配置 AI 模型')
   }
-  return new OpenAI({
+  
+  // Gemini API 的 OpenAI 兼容接口需要使用 X-Goog-Api-Key 头
+  const isGemini = config.baseURL.includes('generativelanguage.googleapis.com')
+  
+  const clientConfig: any = {
     apiKey: config.apiKey,
     baseURL: config.baseURL
-  })
+  }
+  
+  // 对于 Gemini，需要设置自定义 headers
+  // OpenAI SDK 默认使用 Authorization: Bearer，但 Gemini 需要 X-Goog-Api-Key
+  if (isGemini) {
+    // 使用 defaultHeaders 添加 X-Goog-Api-Key
+    // 注意：OpenAI SDK 可能仍会添加 Authorization 头，但 Gemini 会优先使用 X-Goog-Api-Key
+    clientConfig.defaultHeaders = {
+      'X-Goog-Api-Key': config.apiKey
+    }
+  }
+  
+  return new OpenAI(clientConfig)
 }
 
 /**
@@ -364,6 +376,7 @@ export async function testConnection(config: AIConfig): Promise<{ success: boole
   try {
     // 记录配置信息用于调试
     console.log(`[Test] 测试连接 - Provider: ${config.provider || 'unknown'}, BaseURL: ${config.baseURL}, Model: ${config.model}`)
+    console.log(`[Test] API Key 前10位: ${config.apiKey.substring(0, 10)}...`)
     
     const response = await client.chat.completions.create({
       model: config.model,
@@ -377,12 +390,16 @@ export async function testConnection(config: AIConfig): Promise<{ success: boole
     // 提供更详细的错误信息
     const status = error?.status
     const errorDetail = error?.error?.message || error?.error || error?.message || ''
+    const errorUrl = error?.request?.url || error?.config?.url || 'unknown'
     let msg = '连接失败'
+    
+    // 记录详细的错误信息用于调试
+    console.error(`[Test] 请求失败 - Status: ${status}, URL: ${errorUrl}, Error: ${errorDetail}`)
     
     if (status === 404) {
       msg = `API 端点不存在 (404)。可能原因：1) baseURL 配置错误：${config.baseURL}；2) 模型名称不存在：${config.model}；3) API 路径不正确。请检查 baseURL 和模型名称是否正确。`
       if (config.baseURL.includes('generativelanguage.googleapis.com')) {
-        msg += `\n\n🔧 Gemini API 排查：\n- 确认 baseURL 以 /v1beta/openai/ 结尾（当前：${config.baseURL}）\n- 确认模型名称正确（如 gemini-2.0-flash，当前：${config.model}）\n- 检查 API Key 是否配置了 GEMINI_API_KEY\n- 验证 API Key：curl -H "X-Goog-Api-Key: YOUR_KEY" "https://generativelanguage.googleapis.com/v1/models"`
+        msg += `\n\n🔧 Gemini API 排查：\n- 实际请求 URL: ${errorUrl}\n- 配置的 baseURL: ${config.baseURL}\n- 模型名称: ${config.model}\n- 确认 baseURL 应该是: https://generativelanguage.googleapis.com/v1beta/openai（无末尾斜杠）\n- 确认模型名称正确（如 gemini-2.0-flash）\n- 检查 API Key 是否配置了 GEMINI_API_KEY\n- 验证 API Key：curl -H "X-Goog-Api-Key: YOUR_KEY" "https://generativelanguage.googleapis.com/v1/models"`
       } else if (config.baseURL.includes('deepseek.com')) {
         msg += `\n\n🔧 DeepSeek API 排查：\n- 确认 baseURL 为 https://api.deepseek.com（当前：${config.baseURL}）\n- 确认模型名称正确（如 deepseek-chat，当前：${config.model}）\n- 检查 API Key 是否配置了 DEEPSEEK_API_KEY`
       } else if (config.baseURL.includes('openai.com')) {
