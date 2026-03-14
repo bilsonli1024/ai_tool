@@ -87,20 +87,22 @@ router.post('/check-model-access', async (req: Request, res: Response) => {
 /** POST /api/generate-images — 生成单张场景图片 */
 router.post('/generate-images', async (req: Request, res: Response) => {
   try {
-    const { title, bulletPoints, description, productImages, scene } = req.body as {
+    const { title, bulletPoints, description, productImages, scene, aiConfig } = req.body as {
       title?: string
       bulletPoints?: string[]
       description?: string
       productImages?: string[]
       scene?: { key: string; name: string; prompt: string }
+      aiConfig?: Partial<AIConfig>
     }
 
     if (!title) { res.status(400).json({ message: '产品标题不能为空' }); return }
     if (!scene) { res.status(400).json({ message: '场景参数缺失' }); return }
 
-    const apiKey = process.env.OPENAI_API_KEY
+    // 图片生成目前只支持 Gemini，始终使用 Gemini API Key
+    const apiKey = process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY || ''
     if (!apiKey) {
-      res.status(500).json({ message: 'API Key 未配置，请在服务器环境变量中设置 OPENAI_API_KEY' })
+      res.status(500).json({ message: 'Gemini API Key 未配置，请在服务器环境变量中设置 GEMINI_API_KEY 或 OPENAI_API_KEY' })
       return
     }
 

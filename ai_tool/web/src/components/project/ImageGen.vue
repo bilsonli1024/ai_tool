@@ -216,7 +216,8 @@ async function startGenerate() {
         bulletPoints: props.copy.bulletPoints,
         description: props.copy.description,
         productImages: productImagesB64.value,
-        scene: { key: scene.key, name: scene.name, prompt: scene.en }
+        scene: { key: scene.key, name: scene.name, prompt: scene.en },
+        aiConfig: settingsStore.aiConfig  // 传递配置，帮助后端选择 API Key
       }, { timeout: 60000 })
 
       imgRef.base64 = res.data.base64

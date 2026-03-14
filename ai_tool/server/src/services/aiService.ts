@@ -7,6 +7,7 @@ export interface AIConfig {
   apiKey: string  // 仅从环境变量读取，不在接口中暴露
   baseURL: string
   model: string
+  provider?: string  // 可选：服务商 ID，用于更准确地选择 API Key
 }
 
 export interface KeywordItem {
@@ -27,19 +28,88 @@ export interface AmazonCopy {
 }
 
 /**
+ * 根据 provider 或 baseURL 获取对应的 API Key
+ * 支持多个服务商，每个服务商使用独立的环境变量
+ */
+function getApiKeyByProvider(provider?: string, baseURL?: string): string {
+  // 优先根据 provider 选择 API Key
+  if (provider) {
+    switch (provider) {
+      case 'gemini':
+        return process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY || ''
+      case 'deepseek':
+        return process.env.DEEPSEEK_API_KEY || process.env.OPENAI_API_KEY || ''
+      case 'openai':
+        return process.env.OPENAI_API_KEY || ''
+      case 'qwen':
+        return process.env.QWEN_API_KEY || process.env.OPENAI_API_KEY || ''
+      case 'moonshot':
+        return process.env.MOONSHOT_API_KEY || process.env.OPENAI_API_KEY || ''
+      case 'custom':
+        return process.env.CUSTOM_API_KEY || process.env.OPENAI_API_KEY || ''
+    }
+  }
+  
+  // 如果没有 provider，根据 baseURL 判断
+  if (baseURL) {
+    if (baseURL.includes('generativelanguage.googleapis.com') || baseURL.includes('google')) {
+      return process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY || ''
+    }
+    if (baseURL.includes('deepseek.com')) {
+      return process.env.DEEPSEEK_API_KEY || process.env.OPENAI_API_KEY || ''
+    }
+    if (baseURL.includes('openai.com')) {
+      return process.env.OPENAI_API_KEY || ''
+    }
+    if (baseURL.includes('dashscope.aliyuncs.com') || baseURL.includes('aliyun')) {
+      return process.env.QWEN_API_KEY || process.env.OPENAI_API_KEY || ''
+    }
+    if (baseURL.includes('moonshot.cn')) {
+      return process.env.MOONSHOT_API_KEY || process.env.OPENAI_API_KEY || ''
+    }
+    // 自定义接口：尝试使用通用 KEY 或自定义 KEY
+    return process.env.CUSTOM_API_KEY || process.env.OPENAI_API_KEY || ''
+  }
+  
+  // 默认使用 Gemini Key（向后兼容）
+  return process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY || ''
+}
+
+/**
  * 从环境变量和请求中提取 AI 配置
  * API Key 只能从环境变量读取，不允许从前端传递
+ * 根据 provider 或 baseURL 自动选择对应的 API Key
  * 模型和 baseURL 可以从前端选择，但会降级使用环境变量
  */
 export function resolveAIConfig(requestConfig?: Partial<AIConfig>): AIConfig {
-  const apiKey = process.env.OPENAI_API_KEY
+  const baseURL = requestConfig?.baseURL || process.env.OPENAI_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta/openai/'
+  const provider = requestConfig?.provider
+  const apiKey = getApiKeyByProvider(provider, baseURL)
+  
   if (!apiKey) {
-    throw new Error('API Key 未配置，请在服务器环境变量中设置 OPENAI_API_KEY')
+    // 提供更详细的错误信息
+    const providerName = provider || (baseURL.includes('generativelanguage.googleapis.com') ? 'gemini'
+      : baseURL.includes('deepseek.com') ? 'deepseek'
+      : baseURL.includes('openai.com') ? 'openai'
+      : baseURL.includes('dashscope.aliyuncs.com') ? 'qwen'
+      : baseURL.includes('moonshot.cn') ? 'moonshot'
+      : 'custom')
+    
+    const envVarName = providerName === 'gemini' ? 'GEMINI_API_KEY'
+      : providerName === 'deepseek' ? 'DEEPSEEK_API_KEY'
+      : providerName === 'openai' ? 'OPENAI_API_KEY'
+      : providerName === 'qwen' ? 'QWEN_API_KEY'
+      : providerName === 'moonshot' ? 'MOONSHOT_API_KEY'
+      : 'CUSTOM_API_KEY'
+    
+    throw new Error(`API Key 未配置，请在服务器环境变量中设置 ${envVarName}（或设置 OPENAI_API_KEY 作为降级方案）`)
   }
+  
   return {
     apiKey,
-    baseURL: requestConfig?.baseURL || process.env.OPENAI_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta/openai/',
-    model: requestConfig?.model || process.env.OPENAI_MODEL || 'gemini-2.0-flash'
+    baseURL,
+    model: requestConfig?.model || process.env.OPENAI_MODEL || 'gemini-2.0-flash',
+    provider
   }
 }
 

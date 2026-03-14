@@ -145,6 +145,8 @@ export const useSettingsStore = defineStore('settings', () => {
   const supportsImageGen = computed<boolean>(() => currentProvider.value.supportsImageGen)
   const aiConfig = computed(() => ({
     // API Key 不再从前端传递，由服务器从环境变量读取
+    // provider 用于帮助服务器选择对应的 API Key
+    provider: settings.value.provider,
     baseURL: effectiveBaseURL.value,
     model: effectiveModel.value
   }))
