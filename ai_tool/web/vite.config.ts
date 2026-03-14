@@ -7,6 +7,7 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
 
   const devPort = parseInt(env.VITE_DEV_PORT || '5173', 10)
+  const devHost = env.VITE_DEV_HOST || 'localhost'  // 服务器部署改为 0.0.0.0
   const proxyTarget = env.VITE_PROXY_TARGET || 'http://localhost:3001'
 
   return {
@@ -17,6 +18,7 @@ export default defineConfig(({ mode }) => {
       }
     },
     server: {
+      host: devHost,
       port: devPort,
       proxy: {
         // 开发环境：将 /api 请求转发到后端服务
