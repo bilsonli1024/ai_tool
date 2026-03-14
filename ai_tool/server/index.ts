@@ -1,5 +1,4 @@
 import express from 'express'
-import cors from 'cors'
 import dotenv from 'dotenv'
 import apiRouter from './routes/api'
 
@@ -9,26 +8,37 @@ const app = express()
 const PORT = parseInt(process.env.PORT || '3001', 10)
 const HOST = process.env.HOST || '0.0.0.0'  // 0.0.0.0 = 监听所有网卡，服务器部署时可远程访问
 
-// CORS 配置：
-//   CORS_ORIGINS=*               → 允许所有来源（开发/内网部署推荐）
-//   CORS_ORIGINS=https://a.com,https://b.com  → 只允许指定地址
-//   不设置                       → 默认允许本地开发地址
-const rawOrigins = process.env.CORS_ORIGINS || 'http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173'
+// CORS 配置：CORS_ORIGINS=* 允许所有来源，否则只允许列表中的地址
+const rawOrigins = process.env.CORS_ORIGINS || '*'
 const allowAll = rawOrigins.trim() === '*'
+const originList = allowAll ? [] : rawOrigins.split(',').map(o => o.trim()).filter(Boolean)
 
-app.use(cors({
-  origin: allowAll
-    ? '*'                          // 允许所有来源
-    : (origin, callback) => {
-        const list = rawOrigins.split(',').map(o => o.trim()).filter(Boolean)
-        if (!origin || list.includes(origin)) {
-          callback(null, true)
-        } else {
-          callback(new Error(`CORS 拒绝来自 ${origin} 的请求，请在 CORS_ORIGINS 中添加该地址`))
-        }
-      },
-  credentials: !allowAll           // origin=* 时不能同时开启 credentials
-}))
+// 手动设置 CORS 头，比 cors 包更可靠，同时处理 preflight
+app.use((req, res, next) => {
+  const origin = req.headers.origin as string | undefined
+
+  if (allowAll) {
+    // 允许所有来源：不能用 * + credentials，改为回显请求的 Origin
+    res.setHeader('Access-Control-Allow-Origin', origin || '*')
+  } else {
+    if (origin && originList.includes(origin)) {
+      res.setHeader('Access-Control-Allow-Origin', origin)
+    }
+  }
+
+  res.setHeader('Access-Control-Allow-Credentials', 'true')
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS,PATCH')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With')
+  res.setHeader('Access-Control-Max-Age', '86400') // preflight 缓存 24 小时
+
+  // OPTIONS 预检请求直接返回 200
+  if (req.method === 'OPTIONS') {
+    res.sendStatus(200)
+    return
+  }
+
+  next()
+})
 
 app.use(express.json({ limit: '20mb' }))  // 图片 base64 较大，适当调大
 app.use(express.urlencoded({ extended: true }))
