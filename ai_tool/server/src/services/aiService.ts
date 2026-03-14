@@ -86,19 +86,43 @@ ${urlList}
   ]
 }`
 
-  const response = await client.chat.completions.create({
-    model: config.model,
-    messages: [
-      {
-        role: 'system',
-        content: '你是亚马逊产品运营专家，必须严格以 JSON 格式返回结果，不包含任何 markdown 代码块或其他内容。'
-      },
-      { role: 'user', content: prompt }
-    ],
-    temperature: 0.7,
-    max_tokens: 2000,
-    response_format: { type: 'json_object' }
-  })
+  let response
+  try {
+    response = await client.chat.completions.create({
+      model: config.model,
+      messages: [
+        {
+          role: 'system',
+          content: '你是亚马逊产品运营专家，必须严格以 JSON 格式返回结果，不包含任何 markdown 代码块或其他内容。'
+        },
+        { role: 'user', content: prompt }
+      ],
+      temperature: 0.7,
+      max_tokens: 2000,
+      response_format: { type: 'json_object' }
+    })
+  } catch (error: any) {
+    // 处理 API 错误，提供更详细的错误信息
+    const status = error?.status
+    const errorDetail = error?.error?.message || error?.error || error?.message || ''
+    
+    if (status === 403) {
+      const detail = errorDetail ? ` 错误详情: ${errorDetail}` : ''
+      throw new Error(`API 访问被拒绝 (403)。可能原因：1) API Key 无效或过期；2) API Key 没有权限访问该模型；3) 账户余额不足；4) baseURL 配置错误。${detail}`)
+    } else if (status === 401) {
+      const detail = errorDetail ? ` 错误详情: ${errorDetail}` : ''
+      throw new Error(`API Key 认证失败 (401)。请检查 API Key 是否正确。${detail}`)
+    } else if (status === 429) {
+      throw new Error('API 请求频率超限 (429)。请稍后再试。')
+    } else if (status === 500 || status === 503) {
+      throw new Error('API 服务暂时不可用。请稍后再试。')
+    } else if (errorDetail) {
+      throw new Error(`API 请求失败: ${errorDetail}`)
+    } else if (error instanceof Error) {
+      throw error
+    }
+    throw new Error('未知错误')
+  }
 
   const content = response.choices[0]?.message?.content
   if (!content) throw new Error('AI 返回内容为空')
@@ -174,19 +198,43 @@ ${ownSellingPoints.length ? ownSellingPoints.map((p, i) => `${i + 1}. ${p}`).joi
   "searchTerms": "..."
 }`
 
-  const response = await client.chat.completions.create({
-    model: config.model,
-    messages: [
-      {
-        role: 'system',
-        content: '你是专业亚马逊英文文案专家，必须严格以 JSON 格式返回结果，文案全部使用英文，不包含 markdown 标记。'
-      },
-      { role: 'user', content: prompt }
-    ],
-    temperature: 0.8,
-    max_tokens: 3000,
-    response_format: { type: 'json_object' }
-  })
+  let response
+  try {
+    response = await client.chat.completions.create({
+      model: config.model,
+      messages: [
+        {
+          role: 'system',
+          content: '你是专业亚马逊英文文案专家，必须严格以 JSON 格式返回结果，文案全部使用英文，不包含 markdown 标记。'
+        },
+        { role: 'user', content: prompt }
+      ],
+      temperature: 0.8,
+      max_tokens: 3000,
+      response_format: { type: 'json_object' }
+    })
+  } catch (error: any) {
+    // 处理 API 错误，提供更详细的错误信息
+    const status = error?.status
+    const errorDetail = error?.error?.message || error?.error || error?.message || ''
+    
+    if (status === 403) {
+      const detail = errorDetail ? ` 错误详情: ${errorDetail}` : ''
+      throw new Error(`API 访问被拒绝 (403)。可能原因：1) API Key 无效或过期；2) API Key 没有权限访问该模型；3) 账户余额不足；4) baseURL 配置错误。${detail}`)
+    } else if (status === 401) {
+      const detail = errorDetail ? ` 错误详情: ${errorDetail}` : ''
+      throw new Error(`API Key 认证失败 (401)。请检查 API Key 是否正确。${detail}`)
+    } else if (status === 429) {
+      throw new Error('API 请求频率超限 (429)。请稍后再试。')
+    } else if (status === 500 || status === 503) {
+      throw new Error('API 服务暂时不可用。请稍后再试。')
+    } else if (errorDetail) {
+      throw new Error(`API 请求失败: ${errorDetail}`)
+    } else if (error instanceof Error) {
+      throw error
+    }
+    throw new Error('未知错误')
+  }
 
   const content = response.choices[0]?.message?.content
   if (!content) throw new Error('AI 返回内容为空')
@@ -225,8 +273,84 @@ export async function testConnection(config: AIConfig): Promise<{ success: boole
     })
     const reply = response.choices[0]?.message?.content || ''
     return { success: true, message: `连接成功，模型回复：${reply.trim()}` }
-  } catch (error: unknown) {
-    const msg = error instanceof Error ? error.message : '连接失败'
+  } catch (error: any) {
+    // 提供更详细的错误信息
+    const status = error?.status
+    const errorDetail = error?.error?.message || error?.error || error?.message || ''
+    let msg = '连接失败'
+    
+    if (status === 403) {
+      const detail = errorDetail ? ` 错误详情: ${errorDetail}` : ''
+      const modelHint = config.model.includes('gemini') 
+        ? `\n\n💡 检查 gemini-2.0-flash 模型权限的方法：\n1. 访问 https://aistudio.google.com/app/apikey 检查 API Key 状态\n2. 访问 https://console.cloud.google.com/apis/api/generativelanguage.googleapis.com 确认 API 已启用\n3. 使用 curl 测试: curl -H "X-Goog-Api-Key: YOUR_KEY" "https://generativelanguage.googleapis.com/v1/models"\n4. 检查账户配额和地区限制`
+        : ''
+      msg = `API 访问被拒绝 (403)。可能原因：1) API Key 无效或过期；2) API Key 没有权限访问该模型 (${config.model})；3) 账户余额不足；4) baseURL 配置错误。${detail}${modelHint}`
+    } else if (status === 401) {
+      const detail = errorDetail ? ` 错误详情: ${errorDetail}` : ''
+      msg = `API Key 认证失败 (401)。请检查 API Key 是否正确。${detail}`
+    } else if (status === 429) {
+      msg = 'API 请求频率超限 (429)。请稍后再试。'
+    } else if (status === 500 || status === 503) {
+      msg = 'API 服务暂时不可用。请稍后再试。'
+    } else if (errorDetail) {
+      msg = `连接失败: ${errorDetail}`
+    } else if (error instanceof Error) {
+      msg = error.message
+    }
     return { success: false, message: msg }
+  }
+}
+
+/**
+ * 检查模型可用性：测试特定模型是否可以访问
+ */
+export async function checkModelAccess(config: AIConfig, modelName?: string): Promise<{ 
+  success: boolean
+  message: string
+  model?: string
+  available?: boolean
+}> {
+  const client = createClient(config)
+  const modelToTest = modelName || config.model
+
+  try {
+    const response = await client.chat.completions.create({
+      model: modelToTest,
+      messages: [{ role: 'user', content: 'Test' }],
+      max_tokens: 5,
+      temperature: 0
+    })
+    return {
+      success: true,
+      message: `模型 ${modelToTest} 可以正常访问`,
+      model: modelToTest,
+      available: true
+    }
+  } catch (error: any) {
+    const status = error?.status
+    const errorDetail = error?.error?.message || error?.error || error?.message || ''
+    
+    if (status === 403) {
+      return {
+        success: false,
+        message: `模型 ${modelToTest} 访问被拒绝 (403)。可能原因：1) API Key 没有权限访问此模型；2) 模型名称错误；3) 账户配额不足`,
+        model: modelToTest,
+        available: false
+      }
+    } else if (status === 404) {
+      return {
+        success: false,
+        message: `模型 ${modelToTest} 不存在或不可用 (404)`,
+        model: modelToTest,
+        available: false
+      }
+    } else {
+      return {
+        success: false,
+        message: `检查失败: ${errorDetail || error?.message || '未知错误'}`,
+        model: modelToTest,
+        available: false
+      }
+    }
   }
 }

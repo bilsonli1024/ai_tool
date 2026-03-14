@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express'
-import { analyzeCompetitors, generateAmazonCopy, testConnection, resolveAIConfig } from '../services/aiService'
+import { analyzeCompetitors, generateAmazonCopy, testConnection, checkModelAccess, resolveAIConfig } from '../services/aiService'
 import type { AIConfig } from '../services/aiService'
 import { generateSceneImage } from '../services/imageService'
 import { readProjects, saveProject, getProject, deleteProject } from '../services/storageService'
@@ -63,6 +63,25 @@ router.post('/test-connection', async (req: Request, res: Response) => {
     res.json(result)
   } catch (e: unknown) {
     res.json({ success: false, message: e instanceof Error ? e.message : '测试失败' })
+  }
+})
+
+/** POST /api/check-model-access - 检查特定模型的访问权限 */
+router.post('/check-model-access', async (req: Request, res: Response) => {
+  try {
+    const { apiKey, baseURL, model, targetModel } = req.body as { 
+      apiKey?: string
+      baseURL?: string
+      model?: string
+      targetModel?: string
+    }
+    if (!apiKey) { res.status(400).json({ success: false, message: 'API Key 不能为空' }); return }
+    const config = resolveAIConfig({ apiKey, baseURL, model })
+    const modelToCheck = targetModel || config.model
+    const result = await checkModelAccess(config, modelToCheck)
+    res.json(result)
+  } catch (e: unknown) {
+    res.json({ success: false, message: e instanceof Error ? e.message : '检查失败' })
   }
 })
 
