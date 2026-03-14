@@ -93,7 +93,6 @@ export const PROVIDERS: ProviderConfig[] = [
 
 export interface AISettings {
   provider: AIProvider
-  apiKey: string
   model: string
   customBaseURL: string
   customModel: string
@@ -104,7 +103,6 @@ const SETTINGS_KEY = 'amazon_copy_ai_settings'
 export const useSettingsStore = defineStore('settings', () => {
   const settings = ref<AISettings>({
     provider: 'gemini',
-    apiKey: '',
     model: 'gemini-2.0-flash',
     customBaseURL: '',
     customModel: ''
@@ -139,14 +137,14 @@ export const useSettingsStore = defineStore('settings', () => {
     settings.value.provider === 'custom' ? settings.value.customModel : settings.value.model
   )
   const isConfigured = computed<boolean>(() => {
-    if (!settings.value.apiKey) return false
+    // API Key 现在从服务器环境变量读取，前端只需要配置模型即可
     if (settings.value.provider === 'custom')
       return !!(settings.value.customBaseURL && settings.value.customModel)
     return true
   })
   const supportsImageGen = computed<boolean>(() => currentProvider.value.supportsImageGen)
   const aiConfig = computed(() => ({
-    apiKey: settings.value.apiKey,
+    // API Key 不再从前端传递，由服务器从环境变量读取
     baseURL: effectiveBaseURL.value,
     model: effectiveModel.value
   }))

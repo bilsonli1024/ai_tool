@@ -4,7 +4,7 @@ import dotenv from 'dotenv'
 dotenv.config()
 
 export interface AIConfig {
-  apiKey: string
+  apiKey: string  // 仅从环境变量读取，不在接口中暴露
   baseURL: string
   model: string
 }
@@ -27,11 +27,17 @@ export interface AmazonCopy {
 }
 
 /**
- * 从请求中提取 AI 配置，优先使用前端传来的，降级使用环境变量
+ * 从环境变量和请求中提取 AI 配置
+ * API Key 只能从环境变量读取，不允许从前端传递
+ * 模型和 baseURL 可以从前端选择，但会降级使用环境变量
  */
 export function resolveAIConfig(requestConfig?: Partial<AIConfig>): AIConfig {
+  const apiKey = process.env.OPENAI_API_KEY
+  if (!apiKey) {
+    throw new Error('API Key 未配置，请在服务器环境变量中设置 OPENAI_API_KEY')
+  }
   return {
-    apiKey: requestConfig?.apiKey || process.env.OPENAI_API_KEY || '',
+    apiKey,
     baseURL: requestConfig?.baseURL || process.env.OPENAI_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta/openai/',
     model: requestConfig?.model || process.env.OPENAI_MODEL || 'gemini-2.0-flash'
   }
@@ -108,7 +114,10 @@ ${urlList}
     
     if (status === 403) {
       const detail = errorDetail ? ` 错误详情: ${errorDetail}` : ''
-      throw new Error(`API 访问被拒绝 (403)。可能原因：1) API Key 无效或过期；2) API Key 没有权限访问该模型；3) 账户余额不足；4) baseURL 配置错误。${detail}`)
+      const troubleshootingSteps = config.model.includes('gemini')
+        ? `\n\n🔧 403 错误排查（API 限制已配置但仍报错）：\n1. 检查应用程序限制：https://console.cloud.google.com/apis/credentials → API Key → "应用程序限制"设为"无"测试\n2. 确认 API 限制：只选择"Generative Language API"\n3. 检查模型名称：${config.model}\n4. 检查 baseURL：${config.baseURL}\n5. 尝试其他模型：gemini-1.5-flash`
+        : ''
+      throw new Error(`API 访问被拒绝 (403)。可能原因：1) API Key 无效或过期；2) API Key 没有权限访问该模型；3) 账户余额不足；4) baseURL 配置错误；5) 应用程序限制设置过严。${detail}${troubleshootingSteps}`)
     } else if (status === 401) {
       const detail = errorDetail ? ` 错误详情: ${errorDetail}` : ''
       throw new Error(`API Key 认证失败 (401)。请检查 API Key 是否正确。${detail}`)
@@ -220,7 +229,10 @@ ${ownSellingPoints.length ? ownSellingPoints.map((p, i) => `${i + 1}. ${p}`).joi
     
     if (status === 403) {
       const detail = errorDetail ? ` 错误详情: ${errorDetail}` : ''
-      throw new Error(`API 访问被拒绝 (403)。可能原因：1) API Key 无效或过期；2) API Key 没有权限访问该模型；3) 账户余额不足；4) baseURL 配置错误。${detail}`)
+      const troubleshootingSteps = config.model.includes('gemini')
+        ? `\n\n🔧 403 错误排查（API 限制已配置但仍报错）：\n1. 检查应用程序限制：https://console.cloud.google.com/apis/credentials → API Key → "应用程序限制"设为"无"测试\n2. 确认 API 限制：只选择"Generative Language API"\n3. 检查模型名称：${config.model}\n4. 检查 baseURL：${config.baseURL}\n5. 尝试其他模型：gemini-1.5-flash`
+        : ''
+      throw new Error(`API 访问被拒绝 (403)。可能原因：1) API Key 无效或过期；2) API Key 没有权限访问该模型；3) 账户余额不足；4) baseURL 配置错误；5) 应用程序限制设置过严。${detail}${troubleshootingSteps}`)
     } else if (status === 401) {
       const detail = errorDetail ? ` 错误详情: ${errorDetail}` : ''
       throw new Error(`API Key 认证失败 (401)。请检查 API Key 是否正确。${detail}`)
@@ -281,10 +293,10 @@ export async function testConnection(config: AIConfig): Promise<{ success: boole
     
     if (status === 403) {
       const detail = errorDetail ? ` 错误详情: ${errorDetail}` : ''
-      const modelHint = config.model.includes('gemini') 
-        ? `\n\n💡 检查 gemini-2.0-flash 模型权限的方法：\n1. 访问 https://aistudio.google.com/app/apikey 检查 API Key 状态\n2. 访问 https://console.cloud.google.com/apis/api/generativelanguage.googleapis.com 确认 API 已启用\n3. 使用 curl 测试: curl -H "X-Goog-Api-Key: YOUR_KEY" "https://generativelanguage.googleapis.com/v1/models"\n4. 检查账户配额和地区限制`
+      const troubleshootingSteps = config.model.includes('gemini') 
+        ? `\n\n🔧 403 错误排查步骤（API 限制已配置但仍报错）：\n1. 检查应用程序限制：访问 https://console.cloud.google.com/apis/credentials → 点击 API Key → 查看"应用程序限制"，临时设置为"无"测试\n2. 确认 API 限制：确保只选择了"Generative Language API"，没有其他限制\n3. 检查模型名称：确认是 ${config.model}（注意大小写和连字符）\n4. 检查 baseURL：确认是 ${config.baseURL}\n5. 尝试其他模型：如 gemini-1.5-flash 测试是否可用\n6. 检查配额：访问 https://console.cloud.google.com/apis/api/generativelanguage.googleapis.com/quotas\n7. 验证 API Key：curl -H "X-Goog-Api-Key: YOUR_KEY" "https://generativelanguage.googleapis.com/v1/models"`
         : ''
-      msg = `API 访问被拒绝 (403)。可能原因：1) API Key 无效或过期；2) API Key 没有权限访问该模型 (${config.model})；3) 账户余额不足；4) baseURL 配置错误。${detail}${modelHint}`
+      msg = `API 访问被拒绝 (403)。可能原因：1) API Key 无效或过期；2) API Key 没有权限访问该模型 (${config.model})；3) 账户余额不足；4) baseURL 配置错误；5) 应用程序限制设置过严。${detail}${troubleshootingSteps}`
     } else if (status === 401) {
       const detail = errorDetail ? ` 错误详情: ${errorDetail}` : ''
       msg = `API Key 认证失败 (401)。请检查 API Key 是否正确。${detail}`

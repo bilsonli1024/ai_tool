@@ -56,9 +56,8 @@ router.post('/generate', async (req: Request, res: Response) => {
 /** POST /api/test-connection */
 router.post('/test-connection', async (req: Request, res: Response) => {
   try {
-    const { apiKey, baseURL, model } = req.body as { apiKey?: string; baseURL?: string; model?: string }
-    if (!apiKey) { res.status(400).json({ success: false, message: 'API Key 不能为空' }); return }
-    const config = resolveAIConfig({ apiKey, baseURL, model })
+    const { baseURL, model } = req.body as { baseURL?: string; model?: string }
+    const config = resolveAIConfig({ baseURL, model })
     const result = await testConnection(config)
     res.json(result)
   } catch (e: unknown) {
@@ -69,14 +68,12 @@ router.post('/test-connection', async (req: Request, res: Response) => {
 /** POST /api/check-model-access - 检查特定模型的访问权限 */
 router.post('/check-model-access', async (req: Request, res: Response) => {
   try {
-    const { apiKey, baseURL, model, targetModel } = req.body as { 
-      apiKey?: string
+    const { baseURL, model, targetModel } = req.body as { 
       baseURL?: string
       model?: string
       targetModel?: string
     }
-    if (!apiKey) { res.status(400).json({ success: false, message: 'API Key 不能为空' }); return }
-    const config = resolveAIConfig({ apiKey, baseURL, model })
+    const config = resolveAIConfig({ baseURL, model })
     const modelToCheck = targetModel || config.model
     const result = await checkModelAccess(config, modelToCheck)
     res.json(result)
@@ -90,18 +87,22 @@ router.post('/check-model-access', async (req: Request, res: Response) => {
 /** POST /api/generate-images — 生成单张场景图片 */
 router.post('/generate-images', async (req: Request, res: Response) => {
   try {
-    const { title, bulletPoints, description, productImages, apiKey, scene } = req.body as {
+    const { title, bulletPoints, description, productImages, scene } = req.body as {
       title?: string
       bulletPoints?: string[]
       description?: string
       productImages?: string[]
-      apiKey?: string
       scene?: { key: string; name: string; prompt: string }
     }
 
     if (!title) { res.status(400).json({ message: '产品标题不能为空' }); return }
     if (!scene) { res.status(400).json({ message: '场景参数缺失' }); return }
-    if (!apiKey) { res.status(400).json({ message: 'Gemini API Key 未提供' }); return }
+
+    const apiKey = process.env.OPENAI_API_KEY
+    if (!apiKey) {
+      res.status(500).json({ message: 'API Key 未配置，请在服务器环境变量中设置 OPENAI_API_KEY' })
+      return
+    }
 
     console.log(`[Image] 生成场景: ${scene.name}`)
     const result = await generateSceneImage({

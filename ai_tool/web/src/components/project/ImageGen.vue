@@ -216,7 +216,6 @@ async function startGenerate() {
         bulletPoints: props.copy.bulletPoints,
         description: props.copy.description,
         productImages: productImagesB64.value,
-        apiKey: settingsStore.settings.apiKey,
         scene: { key: scene.key, name: scene.name, prompt: scene.en }
       }, { timeout: 60000 })
 

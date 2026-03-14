@@ -67,6 +67,6 @@ export interface GenerateImagesRequest {
   bulletPoints: string[]
   description: string
   productImages: string[]  // base64 参考图片
-  apiKey: string
   scenes?: string[]
+  // apiKey 已移除，现在从服务器环境变量读取
 }

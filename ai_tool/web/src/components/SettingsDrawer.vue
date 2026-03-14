@@ -23,6 +23,15 @@
 
     <div class="settings-content">
 
+      <!-- API Key 说明 -->
+      <el-alert type="info" :closable="false" style="margin-bottom: 8px">
+        <template #title>
+          <span style="font-size: 12px">
+            🔒 API Key 已配置在服务器环境变量中，前端只需选择模型即可使用
+          </span>
+        </template>
+      </el-alert>
+
       <!-- Step 1: 选择服务商 -->
       <div class="settings-section">
         <h4 class="settings-section__title">
@@ -59,37 +68,15 @@
             target="_blank"
             class="doc-link"
           >
-            获取 API Key →
+            查看 API Key 文档 →
           </a>
         </div>
       </div>
 
-      <!-- Step 2: 输入 API Key -->
+      <!-- Step 2: 选择模型 -->
       <div class="settings-section">
         <h4 class="settings-section__title">
           <span class="step-badge">2</span>
-          API Key
-        </h4>
-        <el-input
-          v-model="form.apiKey"
-          :placeholder="selectedProviderConfig?.apiKeyPlaceholder || 'your-api-key'"
-          :type="showApiKey ? 'text' : 'password'"
-          clearable
-        >
-          <template #suffix>
-            <el-icon class="cursor-pointer" @click="showApiKey = !showApiKey">
-              <View v-if="!showApiKey" />
-              <Hide v-else />
-            </el-icon>
-          </template>
-        </el-input>
-        <p class="field-hint">API Key 仅存储在本地浏览器中，不会上传到任何服务器</p>
-      </div>
-
-      <!-- Step 3: 选择模型 -->
-      <div class="settings-section">
-        <h4 class="settings-section__title">
-          <span class="step-badge">3</span>
           选择模型
         </h4>
 
@@ -177,7 +164,7 @@
 import { ref, reactive, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
-  Setting, InfoFilled, View, Hide, Connection,
+  Setting, InfoFilled, Connection,
   SuccessFilled, CircleCloseFilled, Check
 } from '@element-plus/icons-vue'
 import { useSettingsStore, PROVIDERS, type AIProvider } from '../stores/settings'
@@ -187,14 +174,12 @@ const settingsStore = useSettingsStore()
 
 // 本地表单状态（避免直接修改 store）
 const form = reactive({
-  apiKey: settingsStore.settings.apiKey,
   model: settingsStore.settings.model,
   customBaseURL: settingsStore.settings.customBaseURL,
   customModel: settingsStore.settings.customModel
 })
 
 const currentProvider = ref<AIProvider>(settingsStore.settings.provider)
-const showApiKey = ref(false)
 const testing = ref(false)
 const testResult = ref<{ type: 'success' | 'error'; message: string } | null>(null)
 
@@ -203,7 +188,6 @@ watch(
   () => settingsStore.showSettingsDrawer,
   (open) => {
     if (open) {
-      form.apiKey = settingsStore.settings.apiKey
       form.model = settingsStore.settings.model
       form.customBaseURL = settingsStore.settings.customBaseURL
       form.customModel = settingsStore.settings.customModel
@@ -228,7 +212,7 @@ function selectProvider(id: AIProvider) {
 }
 
 const canSave = computed(() => {
-  if (!form.apiKey) return false
+  // API Key 现在从服务器环境变量读取，前端只需要配置模型即可
   if (currentProvider.value === 'custom') {
     return !!(form.customBaseURL && form.customModel)
   }
@@ -272,7 +256,7 @@ async function testConnection() {
 
     const response = await axios.post(
       '/api/test-connection',
-      { apiKey: form.apiKey, baseURL, model },
+      { baseURL, model },
       { timeout: 15000 }
     )
 
@@ -282,7 +266,7 @@ async function testConnection() {
       testResult.value = { type: 'error', message: response.data.message || '连接失败' }
     }
   } catch (error: unknown) {
-    const msg = error instanceof Error ? error.message : '连接失败，请检查 API Key 和网络'
+    const msg = error instanceof Error ? error.message : '连接失败，请检查服务器环境变量配置和网络'
     testResult.value = { type: 'error', message: msg }
   } finally {
     testing.value = false
@@ -293,7 +277,6 @@ async function testConnection() {
 function saveSettings() {
   settingsStore.saveSettings({
     provider: currentProvider.value,
-    apiKey: form.apiKey,
     model: form.model,
     customBaseURL: form.customBaseURL,
     customModel: form.customModel
