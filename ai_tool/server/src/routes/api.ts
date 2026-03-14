@@ -56,8 +56,8 @@ router.post('/generate', async (req: Request, res: Response) => {
 /** POST /api/test-connection */
 router.post('/test-connection', async (req: Request, res: Response) => {
   try {
-    const { baseURL, model } = req.body as { baseURL?: string; model?: string }
-    const config = resolveAIConfig({ baseURL, model })
+    const { provider, baseURL, model } = req.body as { provider?: string; baseURL?: string; model?: string }
+    const config = resolveAIConfig({ provider, baseURL, model })
     const result = await testConnection(config)
     res.json(result)
   } catch (e: unknown) {

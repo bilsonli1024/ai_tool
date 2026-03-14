@@ -76,13 +76,28 @@ function getApiKeyByProvider(provider?: string, baseURL?: string): string {
 }
 
 /**
+ * 规范化 baseURL，确保格式正确
+ */
+function normalizeBaseURL(baseURL: string): string {
+  if (!baseURL) return baseURL
+  // 移除末尾的多个斜杠
+  baseURL = baseURL.replace(/\/+$/, '')
+  // 对于 Gemini，确保末尾有单个斜杠
+  if (baseURL.includes('generativelanguage.googleapis.com') && !baseURL.endsWith('/')) {
+    baseURL += '/'
+  }
+  return baseURL
+}
+
+/**
  * 从环境变量和请求中提取 AI 配置
  * API Key 只能从环境变量读取，不允许从前端传递
  * 根据 provider 或 baseURL 自动选择对应的 API Key
  * 模型和 baseURL 可以从前端选择，但会降级使用环境变量
  */
 export function resolveAIConfig(requestConfig?: Partial<AIConfig>): AIConfig {
-  const baseURL = requestConfig?.baseURL || process.env.OPENAI_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta/openai/'
+  let baseURL = requestConfig?.baseURL || process.env.OPENAI_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta/openai/'
+  baseURL = normalizeBaseURL(baseURL)
   const provider = requestConfig?.provider
   const apiKey = getApiKeyByProvider(provider, baseURL)
   
@@ -347,6 +362,9 @@ export async function testConnection(config: AIConfig): Promise<{ success: boole
   const client = createClient(config)
 
   try {
+    // 记录配置信息用于调试
+    console.log(`[Test] 测试连接 - Provider: ${config.provider || 'unknown'}, BaseURL: ${config.baseURL}, Model: ${config.model}`)
+    
     const response = await client.chat.completions.create({
       model: config.model,
       messages: [{ role: 'user', content: 'Hi, reply "OK" only.' }],
@@ -361,7 +379,16 @@ export async function testConnection(config: AIConfig): Promise<{ success: boole
     const errorDetail = error?.error?.message || error?.error || error?.message || ''
     let msg = '连接失败'
     
-    if (status === 403) {
+    if (status === 404) {
+      msg = `API 端点不存在 (404)。可能原因：1) baseURL 配置错误：${config.baseURL}；2) 模型名称不存在：${config.model}；3) API 路径不正确。请检查 baseURL 和模型名称是否正确。`
+      if (config.baseURL.includes('generativelanguage.googleapis.com')) {
+        msg += `\n\n🔧 Gemini API 排查：\n- 确认 baseURL 以 /v1beta/openai/ 结尾（当前：${config.baseURL}）\n- 确认模型名称正确（如 gemini-2.0-flash，当前：${config.model}）\n- 检查 API Key 是否配置了 GEMINI_API_KEY\n- 验证 API Key：curl -H "X-Goog-Api-Key: YOUR_KEY" "https://generativelanguage.googleapis.com/v1/models"`
+      } else if (config.baseURL.includes('deepseek.com')) {
+        msg += `\n\n🔧 DeepSeek API 排查：\n- 确认 baseURL 为 https://api.deepseek.com（当前：${config.baseURL}）\n- 确认模型名称正确（如 deepseek-chat，当前：${config.model}）\n- 检查 API Key 是否配置了 DEEPSEEK_API_KEY`
+      } else if (config.baseURL.includes('openai.com')) {
+        msg += `\n\n🔧 OpenAI API 排查：\n- 确认 baseURL 为 https://api.openai.com/v1（当前：${config.baseURL}）\n- 确认模型名称正确（如 gpt-4o，当前：${config.model}）\n- 检查 API Key 是否配置了 OPENAI_API_KEY`
+      }
+    } else if (status === 403) {
       const detail = errorDetail ? ` 错误详情: ${errorDetail}` : ''
       const troubleshootingSteps = config.model.includes('gemini') 
         ? `\n\n🔧 403 错误排查步骤（API 限制已配置但仍报错）：\n1. 检查应用程序限制：访问 https://console.cloud.google.com/apis/credentials → 点击 API Key → 查看"应用程序限制"，临时设置为"无"测试\n2. 确认 API 限制：确保只选择了"Generative Language API"，没有其他限制\n3. 检查模型名称：确认是 ${config.model}（注意大小写和连字符）\n4. 检查 baseURL：确认是 ${config.baseURL}\n5. 尝试其他模型：如 gemini-1.5-flash 测试是否可用\n6. 检查配额：访问 https://console.cloud.google.com/apis/api/generativelanguage.googleapis.com/quotas\n7. 验证 API Key：curl -H "X-Goog-Api-Key: YOUR_KEY" "https://generativelanguage.googleapis.com/v1/models"`

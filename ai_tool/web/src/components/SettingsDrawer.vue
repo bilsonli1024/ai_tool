@@ -256,7 +256,11 @@ async function testConnection() {
 
     const response = await axios.post(
       '/api/test-connection',
-      { baseURL, model },
+      { 
+        provider: currentProvider.value,  // 传递 provider 帮助后端选择正确的 API Key
+        baseURL, 
+        model 
+      },
       { timeout: 15000 }
     )
 
